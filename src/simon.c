@@ -3,8 +3,8 @@
 typedef enum {
 	IDLE,
 	INIT,
-	INIT_LED_ON,
-	INIT_LED_OFF,
+	LED_ON,
+	LED_OFF,
 	GAME_SETUP,
 	GAME_LED,
 	WAIT_USER,
@@ -22,64 +22,23 @@ volatile unsigned short button;
 ISR(PCINT1_vect) {
 	if (state == IDLE) {
 		state = INIT;
-	// } else if (state == WAIT_USER) {
-	// 	state = VERIFY;
-	// 	if (PINA & (1<<PINA2)) {
-	// 		button = 0;
-	// 		PORTB = 0x80;
-	// 		PORTD = 0x00;
-	// 	} else if (PINA & (1<<PINA1)) {
-	// 		button = 3;
-	// 		PORTB = 0x10;
-	// 		PORTD = 0x00;
-	// 	} else if (PINA & (1<<PINA0)) {
-	// 		button = 4;
-	// 		PORTB = 0x08;
-	// 		PORTD = 0x00;
-	// 	}
 	}
-	
 }
 
 ISR(PCINT2_vect) {
 	if (state == IDLE) {
 		state = INIT;
-	// } else if (state == WAIT_USER) {
-	// 	state = VERIFY;
-	// 	if (PIND & (1<<PIND0)) {
-	// 		button = 1;
-	// 		PORTB = 0x40;
-	// 		PORTD = 0x00;
-	// 	} else if (PIND & (1<<PIND1)) {
-	// 		button = 2;
-	// 		PORTB = 0x20;
-	// 		PORTD = 0x00;
-	// 	} else if (PIND & (1<<PIND2)) {
-	// 		button = 5;
-	// 		PORTB = 0x04;
-	// 		PORTD = 0x00;
-	// 	} else if (PIND & (1<<PIND3)) {
-	// 		button = 6;
-	// 		PORTB = 0x02;
-	// 		PORTD = 0x00;
-	// 	} else if (PIND & (1<<PIND4)) {
-	// 		button = 7;
-	// 		PORTB = 0x01;
-	// 		PORTD = 0x00;
-	// 	} else if (PIND & (1<<PIND5)) {
-	// 		button = 8;
-	// 		PORTB = 0x00;
-	// 		PORTD = 0x40;
-	// 	}
 	}
 }
 
 ISR(TIMER0_OVF_vect) {
-	if (state == INIT_LED_ON) {
-		state = INIT_LED_OFF;
-	} else if (state == INIT_LED_OFF) {
+	if (state == LED_ON) {
+		state = LED_OFF;
+		PORTB &= 0x00;
+	} else if (state == LED_OFF) {
 		if (!init_led_done) {
-			state = INIT_LED_ON;
+			state = LED_ON;
+			PORTB |= 0xF0;
 			init_led_done = 1;
 		} else {
 			state = GAME_SETUP;
@@ -103,16 +62,16 @@ ISR(TIMER1_COMPA_vect) {
 void lfsr16(unsigned short *rnd_number);
 
 int main(void) {
-	DDRA = 0x00;
+	DDRA = 0x06;
 	PORTA = 0x00;
 	DDRB = 0xFF;
 	PORTB = 0x00;
-	DDRD = 0x40;
+	DDRD = 0x63;
 	PORTD = 0x00;
 
-	GIMSK = 0x18;
-	PCMSK1 = 0x07;
-	PCMSK2 = 0x3F;
+	GIMSK = 0xD8;
+	PCMSK1 = 0x01;
+	PCMSK2 = 0x10;
 	sei();
 
 	TCCR0A = 0x00;
@@ -130,8 +89,8 @@ int main(void) {
 	unsigned short rnd_number = 1;
 	unsigned short *ptr_rnd = &rnd_number;
 
-	unsigned short leds_position[9];
-	unsigned short n_leds = 0;
+	unsigned short game_leds[9];
+	unsigned short n = 0;
 	unsigned short led;
 
 
@@ -139,24 +98,21 @@ int main(void) {
 	{
 		switch (state) {
 		case IDLE:
-			DDRA = 0x00;
+			DDRA = 0x06;
 			PORTA = 0x00;
 			DDRB = 0xFF;
 			PORTB = 0x00;
-			DDRD = 0x40;
+			DDRD = 0x63;
 			PORTD = 0x00;
 			break;
 		case INIT:
-			state = INIT_LED_ON;
+			state = LED_ON;
+			PORTB |= 0xF0;
 			TCNT0 = 0;
 			break;
-		case INIT_LED_ON:
-			PORTB |= 0xFF;
-			PORTD |= 0x40;
+		case LED_ON:
 			break;
-		case INIT_LED_OFF:
-			PORTB &= 0x00;
-			PORTD &= 0xBF;
+		case LED_OFF:
 			break;
 		case GAME_SETUP:
 			if (n_leds < game_leds) {

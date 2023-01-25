@@ -1,5 +1,6 @@
 #include <avr/interrupt.h>
 
+// Se usa enum para asignar nombre de estados y ser usados en el código
 typedef enum {
 	IDLE,
 	INIT,
@@ -15,6 +16,7 @@ typedef enum {
 	LOSE_LED_OFF
 } states;
 
+// Declaración de variables volátiles
 volatile states state = IDLE;
 volatile unsigned short init_led_done = 0;
 volatile unsigned short game_led_done = 0;
@@ -24,6 +26,7 @@ volatile unsigned short lose_led_count = 0;
 volatile unsigned short mem_leds = 4;
 volatile unsigned short button;
 
+// Interrupción para el pin PD2 en modo de INT0
 ISR(INT0_vect) {
 	if (state == IDLE) {
 		state = INIT;
@@ -34,6 +37,7 @@ ISR(INT0_vect) {
 	
 }
 
+// Interrupción para el pin PD3 en modo de INT1
 ISR(INT1_vect) {
 	if (state == IDLE) {
 		state = INIT;
@@ -43,6 +47,7 @@ ISR(INT1_vect) {
 	}
 }
 
+// Interrupción para el pin PB0 en modo de PCINT0
 ISR(PCINT0_vect) {
 	if (state == IDLE) {
 		state = INIT;
@@ -52,6 +57,7 @@ ISR(PCINT0_vect) {
 	}
 }
 
+// Interrupción para el pin PA0 en modo de PCINT1
 ISR(PCINT1_vect) {
 	if (state == IDLE) {
 		state = INIT;
@@ -61,6 +67,7 @@ ISR(PCINT1_vect) {
 	}
 }
 
+// Interrupción para el modo Overflow del Timer0
 ISR(TIMER0_OVF_vect) {
 	if (state == INIT_LED_ON) {
 		state = INIT_LED_OFF;
@@ -92,6 +99,7 @@ ISR(TIMER0_OVF_vect) {
 	}
 }
 
+// Interrupción para el modo CTC del Timer1
 ISR(TIMER1_COMPA_vect) {
 	if (state == GAME_LED) {
 		if (game_led_count < (mem_leds-1)) {
@@ -105,9 +113,12 @@ ISR(TIMER1_COMPA_vect) {
 	
 }
 
+// Declaración de la función lfsr16
 void lfsr16(unsigned short *rnd_number);
 
+// Declaración e implementación de la función main
 int main(void) {
+	// Configuración de los pines y puertos
 	DDRA = 0x06;
 	PORTA = 0x00;
 	DDRB = 0xFE;
@@ -115,15 +126,18 @@ int main(void) {
 	DDRD = 0x73;
 	PORTD = 0x00;
 
+	// Configuración de las interrupciones y de PCINT0 & PCINT1
 	MCUCR = 0x85;
 	GIMSK = 0xE8;
 	PCMSK = 0x01;
 	PCMSK1 = 0x01;
 	sei();
 
+	// Configuración del Timer0
 	TCCR0A = 0x00;
 	TCCR0B = 0x05;
 
+	// Configuración del Timer1
 	TCCR1A = 0x00;
 	TCCR1B = 0x0D;
 	TCCR1C = 0x00;
@@ -133,6 +147,7 @@ int main(void) {
 
 	TIMSK = 0x42;
 
+	// Declaración de variables locales
 	unsigned short rnd_number = 1;
 	unsigned short *ptr_rnd = &rnd_number;
 
@@ -144,7 +159,9 @@ int main(void) {
 
 	while (1)
 	{
+		// Máquina de estados
 		switch (state) {
+		// IDLE: estado donde se espera que se presione algún botón
 		case IDLE:
 			DDRA = 0x06;
 			PORTA = 0x00;
@@ -161,15 +178,21 @@ int main(void) {
 			lose_led_count = 0;
 			mem_leds = 4;
 			break;
+		// INIT: estado donde algún botón fue presionado y se inicia el juego
+		// se inicializa el Timer0
 		case INIT:
 			state = INIT_LED_ON;
 			PORTB |= 0xF0;
 			TCNT0 = 0;
 			break;
+		// INIT_LED_ON y INIT_LED_OFF: estados para el parpadeo de LEDs,
+		// indicando inicio de juego
 		case INIT_LED_ON:
 			break;
 		case INIT_LED_OFF:
 			break;
+		// GAME_SETUP: estado donde se crea la secuencia a memorizar,
+		// se inicializa el Timer1
 		case GAME_SETUP:
 			if (n < mem_leds) {
 				game_leds[n] = rnd_number % 4;
@@ -180,6 +203,8 @@ int main(void) {
 				TCNT1L = 0;
 			}
 			break;
+		// GAME_LED: se enciende el LED correspondiente al elemento actual
+		// de la secuencia
 		case GAME_LED:
 			if (!game_led_done) {
 				led = game_leds[game_led_count];
@@ -202,9 +227,11 @@ int main(void) {
 				game_led_count = 0;
 			}
 			break;
+		// WAIT_USER: estado donde se espera que el usuario presione algún botón
 		case WAIT_USER:
 			PORTB = 0x00;
 			break;
+		// VERIFY: estado donde se verifica el botón presionado contra la secuencia
 		case VERIFY:
 			led = game_leds[game_led_count];
 			if (button == led) {
@@ -218,6 +245,7 @@ int main(void) {
 				state = LOSE;
 			}
 			break;
+		// WIN: estado donde el usuario acertó la secuencia completa
 		case WIN:
 			n = 0;
 			game_led_done = 0;
@@ -233,11 +261,15 @@ int main(void) {
 			}
 			state = GAME_SETUP;
 			break;
+		// LOSE: estado donde el usuario falló la secuencia,
+		// se inicializa el Timer0
 		case LOSE:
 			state = LOSE_LED_ON;
 			PORTB |= 0xF0;
 			TCNT0 = 0;
 			break;
+		// LOSE_LED_ON y LOSE_LED_OFF: estados para el parpadeo de LEDs,
+		// indicando fallo (fin) de juego
 		case LOSE_LED_ON:
 			break;
 		case LOSE_LED_OFF:
@@ -245,11 +277,13 @@ int main(void) {
 		default:
 			break;
 		}
+		// Se actualiza el número aleatorio
 		lfsr16(ptr_rnd);
 	}
 	
 }
 
+// Implementación de la función lfsr16
 void lfsr16(unsigned short *rnd_number) {
 	// Se pregunta si el último bit es 1
 	if ((*rnd_number) & 1) {
